@@ -1,0 +1,318 @@
+package com.mode.ServiceImpl;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.mode.AWSUploader;
+import com.mode.Entity.Certification;
+import com.mode.Entity.User;
+import com.mode.Mapper.LoginMapper;
+import com.mode.Service.FileUploadService;
+import com.mode.Service.LoginService;
+
+@Service
+public class LoginServiceImpl implements LoginService
+{
+	@Autowired
+	private LoginMapper mapper;
+	
+	@Autowired
+	private PasswordEncoder passwordEncoder;
+	
+	@Autowired
+	private FileUploadService fileUpload;
+	
+	private AWSUploader AWSUploader = new AWSUploader();
+	
+	// 로그인
+	@Override
+	public UserDetails loadUserByUsername(String user_username) throws UsernameNotFoundException
+	{
+		User user = mapper.LoginUserInfo(user_username);
+		
+		if(user == null)
+		{
+			return null;
+		}
+		else
+		{
+			return user;
+		}
+	}
+	
+	// 로그인
+	@Override
+	public Object Login(User user)
+	{
+		User data = mapper.Login(user);
+		
+		return data;
+	}
+
+	// 고객 회원가입
+	@Override
+	public Object Join(User user, MultipartFile image)
+	{
+		Map<String, Object> map = new LinkedHashMap<String, Object>();
+		Map<String, Object> result = new LinkedHashMap<String, Object>();
+		
+		HttpStatus status = HttpStatus.NOT_FOUND;
+		
+		// 아이디 중복 확인
+		int checkId = mapper.CheckId(user.getUser_username());
+		
+		if(checkId == 0)
+		{
+			// 비밀번호 암호화
+			user.setUser_password(passwordEncoder.encode(user.getUser_password()));
+			
+			if(image == null)
+			{
+				// 고객 회원가입(이미지 X)
+				int data = mapper.Join(user);
+				
+				if(data == 1)
+				{
+					result.put("detail", "회원가입 되었습니다.");
+					
+					status = HttpStatus.OK;
+				}
+				else
+				{
+					result.put("detail", "회원가입이 실패하였습니다.");
+					
+					status = HttpStatus.INTERNAL_SERVER_ERROR;
+				}
+			}
+			else
+			{
+				String[] extension = image.getContentType().split("/");
+				String DBImageName = AWSUploader.getChangedFilename(extension[1]);
+				
+				if(!extension[0].equals("image"))
+				{
+					result.put("data", image.getOriginalFilename());
+					result.put("detail", "첨부파일이 이미지파일 형식이 아닙니다.");
+					
+					status = HttpStatus.INTERNAL_SERVER_ERROR;
+				}
+				else
+				{
+					// 고객 회원가입(이미지 O)
+					map = fileUpload.Join(user, "mode/profile", image, DBImageName);
+					
+					result = (Map<String, Object>)map.get("result");
+					status = (HttpStatus)map.get("status");
+				}
+			}
+		}
+		else
+		{
+			result.put("detail", "이미 가입된 아이디입니다.");
+			
+			status = HttpStatus.INTERNAL_SERVER_ERROR;
+		}
+		
+		return new ResponseEntity<Map<String, Object>>(result, status);
+	}
+	
+	// 인증번호 발급(휴대전화)
+	@Override
+	public Object InsertCert(String user_phone)
+	{
+		Map<String, Object> result = new LinkedHashMap<String, Object>();
+		
+		HttpStatus status = HttpStatus.NOT_FOUND;
+		
+		Certification cert = new Certification();
+		
+		// 인증번호 난수 발생
+		int content = (int)(Math.random() * 1000000);
+		cert.setCert_contents(content);
+		cert.setUser_phone(user_phone);
+		
+		int data = mapper.InsertCert(cert);
+		
+		if(data == 1)
+		{
+			result.put("detail", "인증번호 발송에 성공하였습니다.");
+			
+			status = HttpStatus.OK;
+		}
+		else
+		{
+			result.put("detail", "인증번호 발송에 실패하였습니다.");
+			
+			status = HttpStatus.INTERNAL_SERVER_ERROR;
+		}
+		
+		return new ResponseEntity<Map<String, Object>>(result, status);
+	}
+	
+	// 인증번호 확인
+	@Override
+	public Object CheckCert(Certification cert)
+	{
+		Map<String, Object> result = new LinkedHashMap<String, Object>();
+		
+		HttpStatus status = HttpStatus.NOT_FOUND;
+		
+		Certification data = mapper.CheckCert(cert);
+		
+		try
+		{
+			if(data == null)
+			{
+				result.put("detail", "인증번호가 일치하지 않습니다.");
+				
+				status = HttpStatus.INTERNAL_SERVER_ERROR;
+			}
+			else
+			{
+				SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+				Date today = new Date();
+				
+				// 현재 날짜, 시간
+				String now = sdf.format(today);
+				Date now2 = sdf.parse(now);
+				
+				// 인증번호 날짜, 시간 
+				String time = data.getCreate_date();
+				Date time2 = sdf.parse(time);
+				
+				// 현재 시간과 인증 시간 차이
+				long term = ((now2.getTime() - time2.getTime()) / (60 * 1000));
+				
+				if(term < 5)
+				{
+					// 인증번호 상태 수정
+					int updateCert = mapper.UpdateCert(data.getCert_id());
+					
+					result.put("data", data);
+					result.put("detail", "인증번호가 일치합니다.");
+					
+					status = HttpStatus.OK;
+				}
+				else
+				{
+					result.put("detail", "인증시간이 초과되었습니다.");
+					
+					status = HttpStatus.INTERNAL_SERVER_ERROR;
+				}
+			}
+			
+		}
+		catch(ParseException e)
+		{
+			e.printStackTrace();
+		}
+		
+		return new ResponseEntity<Map<String, Object>>(result, status);
+	}
+
+	// 아이디 유무 확인
+	@Override
+	public Object FindId(String user_phone, String user_email, int filter)
+	{
+		Map<String, Object> result = new LinkedHashMap<String, Object>();
+		
+		User data = mapper.FindId(user_phone, user_email, filter);
+
+		result.put("data", data);
+		
+		return result;
+	}
+
+	// 비밀번호 수정
+	@Override
+	public Object UpdatePwd(User user)
+	{
+		Map<String, Object> result = new LinkedHashMap<String, Object>();
+		
+		HttpStatus status = HttpStatus.NOT_FOUND;
+		
+		// 비밀번호 암호화
+		user.setUser_password(passwordEncoder.encode(user.getUser_password()));
+		
+		int data = mapper.UpdatePwd(user);
+		
+		if(data == 0)
+		{
+			result.put("detail", "비밀번호가 변경되지 않았습니다.");
+			
+			status = HttpStatus.INTERNAL_SERVER_ERROR;
+		}
+		else
+		{
+			result.put("detail", "비밀번호가 변경되었습니다.");
+			
+			status = HttpStatus.OK;
+		}
+		
+		return new ResponseEntity<Map<String, Object>>(result, status);
+	}
+
+	// 닉네임 중복 확인
+	@Override
+	public Object SelectNickName(String user_nick)
+	{
+		Map<String, Object> result = new LinkedHashMap<String, Object>();
+		
+		HttpStatus status = HttpStatus.NOT_FOUND;
+
+		int data = mapper.SelectNickName(user_nick);
+		
+		if(data == 0)
+		{
+			result.put("detail", "사용 가능한 닉네임입니다.");
+			
+			status = HttpStatus.OK;
+		}
+		else
+		{
+			result.put("detail", "이미 존재하는 닉네임입니다.");
+			
+			status = HttpStatus.INTERNAL_SERVER_ERROR;
+		}
+		
+		return new ResponseEntity<Map<String, Object>>(result, status);
+	}
+
+	// 이메일 중복 확인
+	@Override
+	public Object SelectEmail(String user_username)
+	{
+		Map<String, Object> result = new LinkedHashMap<String, Object>();
+		
+		HttpStatus status = HttpStatus.NOT_FOUND;
+		
+		int data = mapper.SelectEmail(user_username);
+		
+		if(data == 0)
+		{
+			result.put("detail", "사용 가능한 이메일입니다.");
+			
+			status = HttpStatus.OK;
+		}
+		else
+		{
+			result.put("detail", "이미 존재하는 이메일입니다.");
+			
+			status = HttpStatus.INTERNAL_SERVER_ERROR;
+		}
+		
+		return new ResponseEntity<Map<String, Object>>(result, status);
+	}
+}
