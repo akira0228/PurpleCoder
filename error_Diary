@@ -1,0 +1,10 @@
+- 오늘의 에러 일기(entity편)
+
+메인페이지 getSmallCategories 가 mysql 에서는
+  SELECT * FROM products p 
+	       LEFT OUTER JOIN categories c
+	       ON p.cat_id = c.cat_id
+	       WHERE c.cat_parent =125;
+조회했을 때 데이터가 잘 나오는데
+ swagger로 데이터를 조회해 봤을 때, 값이 전부 안나와서 왜일까...했는데 entity에 그 컬럼들을 입력안해줘서 그런 것이었다...
+ 그래서 entity에 컬럼 추가하고 swagger로 다시 api 테스트를 해보니 값이 아주 예쁘게 잘 나왔다. 
