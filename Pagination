@@ -1,0 +1,76 @@
+Offset Pagination
+offset pagination이란, page 혹은 offset/limit을 지정하여 데이터에서 pagination 된 결과를 조회하는 방식을 의미합니다.
+
+/article/?offset=10&limit=10
+/article/?page=1
+ 
+
+이와 같은 쿼리 파라미터를 전달하는 경우, 아래와 같이 쿼리로 데이터를 조회합니다.
+
+select * from article limit 10 offset 20
+ 
+
+offset pagination 방식이 주는 장점은 다음과 같습니다. 
+
+가장 대중적인 방식입니다.
+프레임워크 차원에서 이 방식으로 페이지네이션 기능을 제공하는 경우가 많습니다.
+유저가 페이지를 선택하고, 이동할 수 있습니다.
+전체 페이지의 갯수를 알 수 있습니다.
+그러나 데이터 셋이 크고, 데이터 쓰기가 빈번하게 발생하는 서비스라면 이 방식이 문제가 될 수 있습니다.
+
+offset pagination은 offset 위치를 계산하고, 필요한 데이터를 찾을 때까지 테이블을 전체 스캔합니다.
+만약 DB 메모리보다 스캔해야하는 데이터가 더 커지는 경우 오류가 나게 됩니다. 
+offset이 커질 수록 DB 부하 리스크는 더 커집니다. 
+쓰기 빈도가 빈번한 테이블인 경우, 데이터를 조회하는 도중에 데이터가 추가로 적재될 수 있습니다. 이 경우, 이 사이에 적재된 데이터를 다음 페이지 조회 시 확인할 수 없을 수도 있습니다.
+그래서 다루는 데이터셋이 많고, 쓰기 이벤트가 빈번한 서비스에서는 cursor pagination을 사용합니다. 슬랙, shopify 등의 여러 기업에서도 이 방식을 사용하고 있고, 데이터베이스 솔루션 가이드에서도 이 방식을 권장하고 있습니다.
+
+데이터 크기가 작고, MVP 서비스라면 offset pagination이 동작하겠지만, 가능하다면 처음부터 cursor pagination 방식을 사용하는게 좋습니다.
+
+
+
+Cursor Pagination
+Cursor Pagnation은 다음 페이지네이션의 PK를 기반으로 페이지를 구하는 방식을 말합니다.
+
+/article/?cursor=1&limit=10
+SELECT * FROM article WHERE id <= {cursor} ORDER BY id DESC LIMIT {limit}
+이 방식을 사용하면 offset pagination의 2가지 문제를 해소할 수 있습니다.
+
+인덱스가 적용된 값을 비교하기 때문에 테이블 풀스캔을 하지 않습니다.
+id 값으로 데이터를 조회하기 때문에, 데이터 쓰기가 빈번한 테이블이여도 다음 페이지네이션 조회 시 값이 누락되지 않습니다. 
+대신 이 방식을 사용하면 전체 페이지 갯수를 조회할 수는 없습니다. 
+
+
+cursor pagination을 사용하면, pagination navigation을 구현할 수 없습니다
+ 
+
+대용량 데이터를 다루는 서비스에서는 주로 드래그 액션으로만 다음 페이지를 탐색합니다.
+
+그래서 이와 같은 단점이 문제되지 않은 것으로 보입니다. 
+
+ 
+
+슬랙 API의 경우, Json 응답값에 다음 조회에 사용될 cursor 위치를 내려주고 있습니다. 
+
+{
+    "ok": true,
+    "members": [
+        {
+            "id": "USLACKBOT",
+            "team_id": "T0G9PQBBK",
+            "name": "slackbot",
+            ...
+        },
+        {
+            "id": "W07QCRPA4",
+            "team_id": "T0G9PQBBK",
+            "name": "glinda",
+            ...
+        }
+    ],
+    "cache_ts": 1498777272,
+    "response_metadata": {
+        "next_cursor": "dXNlcjpXMDdRQ1JQQTQ="
+    }
+}
+ 
+
