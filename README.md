@@ -1,2 +1,3 @@
-# PurpleCoder
-개발 다이어리
+# TIL
+Today I Learned
+
