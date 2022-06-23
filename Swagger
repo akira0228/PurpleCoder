@@ -1,0 +1,128 @@
+[Swagger]
+Swagger란 서버로 요청되는 URL 리스트를 HTML화면으로 문서화 및 테스트 할 수 있는 라이브러리이다.
+
+간단하게 설명하면 Swagger는 API Spec 문서이다.
+
+API를 엑셀이나 가이드 문서를 통해 관리하는 방법은 주기적인 업데이트가 필요하기 때문에 관리가 쉽지 않고 시간이 오래 걸린다.
+
+그래서 Swagger를 사용해 API Spec 문서를 자동화해주어 간편하게 API문서를 관리하면서 테스트할 수 있다.
+
+ 
+
+ 
+
+[ API 설명을 위한 어노테이션 ]
+Annotations
+Swagger에서 API 설명을 위한 Annotation 들을 아래에 정리한다.
+
+@ApiOperation = Method 설명
+@ApiOperation으로 해당 Controller 안의 method의 설명을 추가할 수 있다.
+
+    @ApiOperation(
+        value = "사용자 정보 조회"
+        , notes = "사용자의 ID를 통해 사용자의 정보를 조회한다.")
+    @GetMapping("/user/{id}")
+    @ResponseBody
+    public UserDTO getUser(@PathVariable(name = "id") String id) {
+        return userService.findUserInfoById(id);
+    }
+혹은 @Operation 으로 해당 Controller 안의 method의 설명을 추가할 수도 있다. 
+
+@ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "성공"),
+            ApiResponse(responseCode = "404", description = "리소스를 찾을 수 없습니다.")
+        ]
+    )
+    @Operation(summary = "공지사항 상세 조회")
+    fun getDetail(@PathVariable noticeId: Long) =
+ 
+[ 파라미터를 설명하는 어노테이션 ]
+@ApiImplicitParam = Request Parameter 설명
+ 
+
+@ApiImplicitParam Annotation으로 해당 API Method 호출에 필요한 Parameter들의 설명을 추가할 수 있다.
+
+    @ApiOperation(
+        value = "사용자 정보 조회"
+        , notes = "사용자의 ID를 통해 사용자의 정보를 조회한다.")
+    @ApiImplicitParam(
+        name = "id"
+        , value = "사용자 아이디"
+        , required = true
+        , dataType = "string"
+        , paramType = "path"
+        , defaultValue = "None")
+    @GetMapping("/user/{id}")
+    @ResponseBody
+    public UserDTO getUser(@PathVariable(name = "id") String id) {
+        return userService.findUserInfoById(id);
+    }
+dataType, paramType, required의 경우 해당 name의 정보가 자동으로 채워지므로 생략 할 수 있다.
+
+paramType의 경우 @RequestParam은 query를,
+
+@PathVariable은 path를 명시해주면 된다.
+
+만약 해당 Method의 Parameter가 복수일 경우,
+
+@ApiImplictParams로 @ApiImplictParam을 복수개 사용할 수 있다.
+
+    @ApiOperation(
+        value = "자격증 정보 조회"
+        , notes = "자격증의 ID를 통해 자격증의 정보를 조회한다.")
+    @ApiImplicitParams(
+        {
+            @ApiImplicitParam(
+                name = "id"
+                , value = "자격증 아이디"
+                , required = true
+                , dataType = "string"
+                , paramType = "path"
+                , defaultValue = "None"
+            )
+        ,
+            @ApiImplicitParam(
+                name = "fields"
+                , value = "응답 필드 종류"
+                , required = false
+                , dataType = "string"
+                , paramType = "query"
+                , defaultValue = ""
+            )
+        })
+    @GetMapping("/licenses/{id}")
+    @ResponseBody
+    public UserDTO getLicense(@PathVariable(name = "id") String id, @RequestParam(name = "fields", required = false) String fields) {
+        return userService.findUserInfoById(id);
+    }
+
+ 
+
+ 
+
+[ API Response에 대해 설명하는 어노테이션 ]
+@ApiResponse = Reponse 설명
+@ApiResponse Annotation으로 해당 method의 Response에 대한 설명을 작성할 수 있다.
+
+    @ApiResponse(
+        code = 200
+        , message = "성공입니다."
+    )
+    @GetMapping("/notices/{id}")
+    public String getNotice() {
+        return "notice";
+    }
+ 
+
+복수개의 Response에 대한 설명을 추가 하고 싶다면,
+@ApiResponses를 사용하면 된다.
+
+    @ApiResponses({
+        @ApiResponse(code = 200, message = "성공입니다.")
+        , @ApiResponse(code = 400, message = "접근이 올바르지 않습니다.")
+    })
+    @GetMapping("/notices/{id}")
+    public String getNotice() {
+        return "notice";
+    }
